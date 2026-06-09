@@ -13,6 +13,8 @@ export interface BookingData {
   friendCount: number
   friendNames: string[]
   selectedTrack: SpotifyTrack | null
+  bookingId: string | null
+  isWaitlist: boolean
 }
 
 interface BookingContextType {
@@ -35,6 +37,8 @@ const defaultBookingData: BookingData = {
   friendCount: 0,
   friendNames: [],
   selectedTrack: null,
+  bookingId: null,
+  isWaitlist: false,
 }
 
 const BookingContext = createContext<BookingContextType | null>(null)

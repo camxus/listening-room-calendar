@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { User, Mail, Instagram, Users, Minus, Plus, X } from 'lucide-react'
+
 interface BookingFormProps {
   fullName: string
   email: string
@@ -55,6 +56,10 @@ export function BookingForm({
     onFriendCountChange(friendCount - 1)
   }
 
+  // Check if friend names are valid (used for UI feedback)
+  const friendNamesValid = friendCount === 0 || 
+    friendNames.slice(0, friendCount).every(name => name.trim() !== '')
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -69,7 +74,7 @@ export function BookingForm({
         className="space-y-4"
       >
         <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-          Your Details
+          Your Information
         </h3>
 
         <div className="space-y-4">
@@ -218,7 +223,10 @@ export function BookingForm({
                     placeholder={`Friend ${index + 1} name`}
                     value={name}
                     onChange={(e) => handleFriendNameChange(index, e.target.value)}
-                    className="pl-11 py-5 rounded-lg border-border bg-card shadow-sm focus:shadow-md transition-shadow"
+                    className={cn(
+                      "pl-11 py-5 rounded-lg border-border bg-card shadow-sm focus:shadow-md transition-shadow",
+                      !name.trim() && "border-destructive/50"
+                    )}
                   />
                 </div>
                 <button
@@ -229,10 +237,19 @@ export function BookingForm({
                 </button>
               </motion.div>
             ))}
+            
+            {friendCount > 0 && !friendNamesValid && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-sm text-destructive"
+              >
+                Please enter names for all friends
+              </motion.p>
+            )}
           </div>
         </motion.div>
       </motion.div>
-
     </motion.div>
   )
 }

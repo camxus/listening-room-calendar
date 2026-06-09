@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import useSWR from 'swr'
 import { toast } from 'sonner'
@@ -8,9 +8,9 @@ import { ArrowRight, ArrowLeft, Loader2 } from 'lucide-react'
 
 import { TimeSlotList } from '@/components/time-slot-card'
 import { BookingForm } from '@/components/booking-form'
+import { SongSubmission } from '@/components/song-submission'
 import { SuccessScreen } from '@/components/success-screen'
 import { ProgressIndicator } from '@/components/progress-indicator'
-import { SpotifySearch } from '@/components/spotify-search'
 import { BookingProvider, useBooking } from '@/lib/booking-context'
 import { TimeSlot } from '@/lib/firebase'
 
@@ -31,26 +31,17 @@ function BookingFlowContent() {
     refreshInterval: 10000,
   })
 
-  const [waitlistSlot, setWaitlistSlot] = useState<TimeSlot | null>(null)
-
   const handleSelectSlot = (slot: TimeSlot) => {
+    const isFull = (slot.capacity || 0) - (slot.bookedCount || 0) <= 0
     updateBookingData({
       slotId: slot.id,
       slotTime: slot.time,
       slotDisplayTime: slot.displayTime,
+      isWaitlist: isFull || false,
     })
   }
-
-  const handleJoinWaitlist = async (slot: TimeSlot) => {
-    toast.info(`The ${slot.displayTime} slot is full. Waitlist coming soon!`)
-  }
-
+  
   const handleSubmit = async () => {
-    if (!bookingData.fullName || !bookingData.email) {
-      toast.error('Please fill in all required fields')
-      return
-    }
-
     setIsSubmitting(true)
 
     try {
@@ -59,6 +50,7 @@ function BookingFlowContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slotId: bookingData.slotId,
+          slotDisplayTime: bookingData.slotDisplayTime,
           fullName: bookingData.fullName,
           email: bookingData.email,
           instagram: bookingData.instagram || null,
@@ -74,8 +66,14 @@ function BookingFlowContent() {
         throw new Error(data.error || 'Failed to create booking')
       }
 
+      // Store the bookingId and isWaitlist from the response
+      updateBookingData({ 
+        bookingId: data.bookingId,
+        isWaitlist: data.isWaitlist || false,
+      })
+
       mutate()
-      setStep(4)
+      setStep(4) // Success screen is now step 4
       toast.success('Booking confirmed!')
     } catch (error) {
       console.error('Booking error:', error)
@@ -85,9 +83,18 @@ function BookingFlowContent() {
     }
   }
 
+  // Validation checks
   const canProceedToStep2 = bookingData.slotId !== ''
-  const canProceedToStep3 = !!(bookingData.fullName && bookingData.email)
-  const canSubmit = bookingData.fullName && bookingData.email
+  
+  // Step 2 validation: name, email, and friend names if friends added
+  const friendNamesValid = bookingData.friendCount === 0 || 
+    bookingData.friendNames.slice(0, bookingData.friendCount).every(name => name.trim() !== '')
+  const canProceedToStep3 = bookingData.fullName.trim() !== '' && 
+    bookingData.email.trim() !== '' && 
+    friendNamesValid
+  
+  // Step 3: can always submit (song is optional)
+  const canSubmit = true
 
   const pageVariants = {
     initial: (direction: number) => ({
@@ -115,6 +122,7 @@ function BookingFlowContent() {
     }),
   }
 
+  // Success screen is now step 4
   if (step === 4) {
     return <SuccessScreen bookingData={bookingData} onReset={resetBooking} />
   }
@@ -176,7 +184,6 @@ function BookingFlowContent() {
                   slots={slots || []}
                   selectedSlotId={bookingData.slotId}
                   onSelectSlot={handleSelectSlot}
-                  onJoinWaitlist={handleJoinWaitlist}
                   isLoading={isLoading}
                 />
               </motion.div>
@@ -199,7 +206,7 @@ function BookingFlowContent() {
                     transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
                     className="text-2xl font-bold text-foreground mb-2"
                   >
-                    Complete Your Booking
+                    Your Details
                   </motion.h2>
                   <motion.p
                     initial={{ opacity: 0, filter: 'blur(4px)' }}
@@ -243,7 +250,7 @@ function BookingFlowContent() {
                     transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
                     className="text-2xl font-bold text-foreground mb-2"
                   >
-                    Choose Your Song
+                    Submit Your Song
                   </motion.h2>
                   <motion.p
                     initial={{ opacity: 0, filter: 'blur(4px)' }}
@@ -251,27 +258,21 @@ function BookingFlowContent() {
                     transition={{ duration: 0.4, delay: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
                     className="text-muted-foreground"
                   >
-                    Pick one song to add to our listening room playlist
+                    Pick one song to add to our listening room playlist (optional)
                   </motion.p>
                 </div>
 
-                <motion.div
-                  initial={{ opacity: 0, filter: 'blur(8px)' }}
-                  animate={{ opacity: 1, filter: 'blur(0px)' }}
-                  transition={{ duration: 0.4, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-                >
-                  <SpotifySearch
-                    selectedTrack={bookingData.selectedTrack}
-                    onSelectTrack={(track) => updateBookingData({ selectedTrack: track })}
-                  />
-                </motion.div>
+                <SongSubmission
+                  selectedTrack={bookingData.selectedTrack}
+                  onTrackSelect={(track) => updateBookingData({ selectedTrack: track })}
+                />
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </main>
 
-      {/* Footer / CTA - Skeuomorphic flat buttons */}
+      {/* Footer / CTA */}
       <motion.footer
         initial={{ opacity: 0, filter: 'blur(8px)' }}
         animate={{ opacity: 1, filter: 'blur(0px)' }}
@@ -292,7 +293,7 @@ function BookingFlowContent() {
             <button
               onClick={() => setStep(2)}
               disabled={!canProceedToStep2}
-              className="flex-1 h-12 rounded-xl font-semibold text-base transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-card disabled:border disabled:border-border/80 disabled:text-foreground disabled:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.08)] bg-primary text-primary-foreground shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:opacity-90 active:opacity-80"
+              className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-semibold text-base shadow-[0_1px_3px_rgba(0,0,0,0.12),0_4px_12px_rgba(79,70,229,0.3)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.15),0_6px_16px_rgba(79,70,229,0.35)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200 flex items-center justify-center gap-2"
             >
               Continue
               <ArrowRight className="w-5 h-5" />
@@ -301,9 +302,15 @@ function BookingFlowContent() {
 
           {step === 2 && (
             <button
-              onClick={() => setStep(3)}
+              onClick={() => {
+                if (!friendNamesValid) {
+                  toast.error('Please enter names for all friends')
+                  return
+                }
+                setStep(3)
+              }}
               disabled={!canProceedToStep3}
-              className="flex-1 h-12 rounded-xl font-semibold text-base transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-card disabled:border disabled:border-border/80 disabled:text-foreground disabled:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.08)] bg-primary text-primary-foreground shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:opacity-90 active:opacity-80"
+              className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-semibold text-base shadow-[0_1px_3px_rgba(0,0,0,0.12),0_4px_12px_rgba(79,70,229,0.3)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.15),0_6px_16px_rgba(79,70,229,0.35)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200 flex items-center justify-center gap-2"
             >
               Continue
               <ArrowRight className="w-5 h-5" />
@@ -313,8 +320,8 @@ function BookingFlowContent() {
           {step === 3 && (
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="flex-1 h-12 rounded-xl font-semibold text-base transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-card disabled:border disabled:border-border/80 disabled:text-foreground disabled:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.08)] bg-primary text-primary-foreground shadow-[0_1px_3px_rgba(0,0,0,0.12)] hover:opacity-90 active:opacity-80"
+              disabled={!canSubmit || isSubmitting}
+              className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-semibold text-base shadow-[0_1px_3px_rgba(0,0,0,0.12),0_4px_12px_rgba(79,70,229,0.3)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.15),0_6px_16px_rgba(79,70,229,0.35)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200 flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>

@@ -10,7 +10,6 @@ interface TimeSlotCardProps {
   slot: TimeSlot
   isSelected: boolean
   onSelect: () => void
-  onJoinWaitlist?: () => void
 }
 
 export function TimeSlotCard({ slot, isSelected, onSelect, onJoinWaitlist }: TimeSlotCardProps) {
@@ -20,7 +19,7 @@ export function TimeSlotCard({ slot, isSelected, onSelect, onJoinWaitlist }: Tim
 
   return (
     <motion.button
-      onClick={isFull ? onJoinWaitlist : onSelect}
+      onClick={onSelect}
       disabled={false}
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
@@ -32,7 +31,7 @@ export function TimeSlotCard({ slot, isSelected, onSelect, onJoinWaitlist }: Tim
         'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background',
         isSelected && !isFull && 'border-primary bg-primary/5 shadow-md shadow-primary/10 ring-1 ring-primary/20',
         !isSelected && !isFull && 'border-border bg-card hover:border-primary/30 hover:shadow-sm',
-        isFull && 'border-border/50 bg-muted/30 cursor-pointer'
+        isFull && 'border-primary/30 bg-primary/5 cursor-pointer hover:bg-primary/10'
       )}
     >
       <div className="relative flex items-center justify-between gap-4">
@@ -40,14 +39,14 @@ export function TimeSlotCard({ slot, isSelected, onSelect, onJoinWaitlist }: Tim
           <div className={cn(
             'flex items-center justify-center w-10 h-10 rounded-lg transition-colors',
             isSelected && !isFull ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground',
-            isFull && 'bg-muted text-muted-foreground'
+            isFull && 'bg-primary/20 text-primary'
           )}>
             <Clock className="w-5 h-5" />
           </div>
           <div>
             <p className={cn(
               'font-semibold text-base',
-              isFull && 'text-muted-foreground'
+              isFull && 'text-foreground'
             )}>
               {slot.displayTime}
             </p>
@@ -59,13 +58,18 @@ export function TimeSlotCard({ slot, isSelected, onSelect, onJoinWaitlist }: Tim
 
         <div className="flex flex-col items-end gap-1">
           {isFull ? (
-            <motion.span
+            <motion.div
               initial={{ scale: 0.9 }}
               animate={{ scale: 1 }}
-              className="px-3 py-1 text-xs font-medium rounded-full bg-destructive/10 text-destructive"
+              className="flex flex-col items-end gap-1"
             >
-              Full
-            </motion.span>
+              <span className="px-3 py-1 text-xs font-semibold rounded-full bg-primary/20 text-primary">
+                Waitlist
+              </span>
+              <span className="text-xs text-primary font-medium">
+                Tap to join
+              </span>
+            </motion.div>
           ) : (
             <div className="flex items-center gap-1.5 text-sm">
               <Users className="w-4 h-4 text-muted-foreground" />
@@ -76,11 +80,6 @@ export function TimeSlotCard({ slot, isSelected, onSelect, onJoinWaitlist }: Tim
                 {availableSpots} spots available
               </span>
             </div>
-          )}
-          {isFull && onJoinWaitlist && (
-            <span className="text-xs text-primary font-medium">
-              Join waitlist
-            </span>
           )}
         </div>
       </div>
@@ -118,13 +117,11 @@ export function TimeSlotList({
   slots,
   selectedSlotId,
   onSelectSlot,
-  onJoinWaitlist,
   isLoading,
 }: {
   slots: TimeSlot[]
   selectedSlotId: string | null
   onSelectSlot: (slot: TimeSlot) => void
-  onJoinWaitlist: (slot: TimeSlot) => void
   isLoading: boolean
 }) {
   if (isLoading) {
@@ -156,7 +153,6 @@ export function TimeSlotList({
           slot={slot}
           isSelected={selectedSlotId === slot.id}
           onSelect={() => onSelectSlot(slot)}
-          onJoinWaitlist={() => onJoinWaitlist(slot)}
         />
       ))}
     </motion.div>

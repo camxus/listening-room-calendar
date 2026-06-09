@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
-import { Check, Clock, Users, ExternalLink, ArrowRight } from 'lucide-react'
+import { Check, Clock, Users, ExternalLink, ArrowRight, Copy, Settings } from 'lucide-react'
 import { BookingData } from '@/lib/booking-context'
 import { formatTimeRange } from '@/lib/time-slots'
 import { SpotifyTrackCard } from './spotify-search'
+import Link from 'next/link'
 
 interface SuccessScreenProps {
   bookingData: BookingData
@@ -15,6 +16,15 @@ interface SuccessScreenProps {
 
 export function SuccessScreen({ bookingData, onReset }: SuccessScreenProps) {
   const confettiRef = useRef(false)
+  const [copied, setCopied] = useState(false)
+
+  const copyBookingId = () => {
+    if (bookingData.bookingId) {
+      navigator.clipboard.writeText(bookingData.bookingId)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
 
   useEffect(() => {
     if (!confettiRef.current) {
@@ -97,8 +107,22 @@ export function SuccessScreen({ bookingData, onReset }: SuccessScreenProps) {
           transition={{ duration: 0.4, delay: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="text-muted-foreground"
         >
-          Your listening room slot is confirmed
+          {bookingData.isWaitlist
+            ? 'Waitlist spot has been secured'
+            : 'Your listening room slot is confirmed'}
         </motion.p>
+        {bookingData.bookingId && (
+          <motion.button
+            {...fadeBlurIn}
+            transition={{ duration: 0.4, delay: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+            onClick={copyBookingId}
+            className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border text-sm font-mono text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span>Booking ID: {bookingData.bookingId}</span>
+            <Copy className="w-3.5 h-3.5" />
+            {copied && <span className="text-xs text-primary">Copied!</span>}
+          </motion.button>
+        )}
       </motion.div>
 
       {/* RSVP Section - PROMINENT */}
@@ -196,7 +220,7 @@ export function SuccessScreen({ bookingData, onReset }: SuccessScreenProps) {
       <motion.div
         {...fadeBlurIn}
         transition={{ duration: 0.5, delay: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="px-4 pb-8"
+        className="px-4 pb-4"
       >
         <div className="max-w-md mx-auto">
           <p className="text-xs text-center text-muted-foreground mb-3">Follow us on Instagram for updates</p>
@@ -226,6 +250,25 @@ export function SuccessScreen({ bookingData, onReset }: SuccessScreenProps) {
           </div>
         </div>
       </motion.div>
+
+      {/* Manage Booking Link */}
+      {bookingData.bookingId && (
+        <motion.div
+          {...fadeBlurIn}
+          transition={{ duration: 0.5, delay: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="px-4 pb-8"
+        >
+          <div className="max-w-md mx-auto text-center">
+            <Link
+              href={`/${bookingData.bookingId}`}
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              Manage or cancel your booking
+            </Link>
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   )
 }

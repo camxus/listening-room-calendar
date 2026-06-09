@@ -21,11 +21,11 @@ export async function searchTracks(query: string): Promise<SpotifyTrack[]> {
   return response.json()
 }
 
-export async function addTrackToPlaylist(trackUri: string): Promise<boolean> {
+export async function addTrackToPlaylist(trackUri: string, slotDisplayTime: string): Promise<boolean> {
   const response = await fetch('/api/spotify/playlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ trackUri }),
+    body: JSON.stringify({ trackUri, slotDisplayTime }),
   })
   
   return response.ok
