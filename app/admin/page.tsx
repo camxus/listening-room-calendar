@@ -220,7 +220,7 @@ export default function AdminDashboard() {
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                slots?.map((slot) => {
+                (Array.isArray(slots) ? slots : []).map((slot) => {
                   const slotBookings = bookingsBySlot[slot.id] || []
                   const isExpanded = expandedSlot === slot.id
 

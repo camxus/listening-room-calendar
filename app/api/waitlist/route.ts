@@ -1,21 +1,28 @@
 import { NextResponse } from 'next/server'
-import { initializeApp, getApps, cert } from 'firebase-admin/app'
-import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { initializeApp, getApps, getApp } from 'firebase/app'
+import {
+  getFirestore,
+  serverTimestamp,
+  collection,
+  doc,
+  setDoc,
+  query,
+  where,
+  orderBy,
+  getDocs
+} from 'firebase/firestore'
 
-// Initialize Firebase Admin
-if (getApps().length === 0) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-    : undefined
-
-  if (serviceAccount) {
-    initializeApp({
-      credential: cert(serviceAccount),
-    })
-  }
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-const db = getApps().length > 0 ? getFirestore() : null
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
+const db = getFirestore(app)
 
 export async function POST(request: Request) {
   try {
@@ -29,32 +36,30 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!db) {
-      return NextResponse.json({
-        success: true,
-        waitlistId: `mock-waitlist-${Date.now()}`,
-        message: 'Added to waitlist (demo mode)',
-      })
-    }
+    // create waitlist booking
+    const bookingRef = doc(collection(db, 'bookings'))
 
-    const waitlistRef = db.collection('waitlist').doc()
-    await waitlistRef.set({
+    await setDoc(bookingRef, {
       slotId,
       fullName,
       email,
       groupSize,
-      createdAt: FieldValue.serverTimestamp(),
+      status: 'waitlist',
+      isWaitlist: true,
+      createdAt: serverTimestamp(),
     })
 
     return NextResponse.json({
       success: true,
-      waitlistId: waitlistRef.id,
+      waitlistId: bookingRef.id,
       message: 'Added to waitlist!',
     })
   } catch (error) {
     console.error('Waitlist error:', error)
     return NextResponse.json(
-      { error: 'Failed to join waitlist' },
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     )
   }
@@ -62,20 +67,26 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    if (!db) {
-      return NextResponse.json([])
-    }
-
     const { searchParams } = new URL(request.url)
     const slotId = searchParams.get('slotId')
 
-    let query = db.collection('waitlist').orderBy('createdAt', 'asc')
-    
-    if (slotId) {
-      query = query.where('slotId', '==', slotId) as typeof query
-    }
+    const bookingsCol = collection(db, 'bookings')
 
-    const snapshot = await query.get()
+    // IMPORTANT: build query safely (no reassignment bugs)
+    const q = slotId
+      ? query(
+          bookingsCol,
+          where('status', '==', 'waitlist'),
+          where('slotId', '==', slotId),
+          orderBy('createdAt', 'asc')
+        )
+      : query(
+          bookingsCol,
+          where('status', '==', 'waitlist'),
+          orderBy('createdAt', 'asc')
+        )
+
+    const snapshot = await getDocs(q)
 
     const waitlist = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -87,7 +98,9 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error fetching waitlist:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch waitlist' },
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     )
   }

@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------
+    // BOOKINGS
+    // ---------------------------
+    match /bookings/{bookingId} {
+
+      // Allow creating a booking (user submits form)
+      allow create: if isValidBooking(request.resource.data);
+
+      // Allow reading bookings if:
+      // - it's their own email OR you later replace with auth.uid
+      allow read: if request.auth != null
+        && request.auth.token.email == resource.data.email;
+
+      // Prevent users from modifying bookings directly
+      allow update, delete: if false;
+    }
+
+    // ---------------------------
+    // SLOTS
+    // ---------------------------
+    match /slots/{slotId} {
+
+      // Anyone can read slots (for booking UI)
+      allow read: if true;
+
+      // Only allow writes from server/admin
+      allow write: if false;
+    }
+
+    // ---------------------------
+    // VALIDATION HELPERS
+    // ---------------------------
+    function isValidBooking(data) {
+      return data.keys().hasAll([
+        'bookingId',
+        'slotId',
+        'fullName',
+        'email',
+        'groupSize',
+        'status',
+        'isWaitlist',
+        'createdAt'
+      ])
+      // basic type checks
+      && data.groupSize is number
+      && data.email is string
+      && data.fullName is string
+      && data.slotId is string
+      && (data.status == 'confirmed' || data.status == 'waitlist');
+    }
+  }
+}

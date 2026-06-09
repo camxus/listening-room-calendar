@@ -33,7 +33,7 @@ async function findOrCreatePlaylist(slotDisplayTime: string): Promise<string> {
     return existing.id
   }
 
-  const created = await spotifyApi.createPlaylist(userIdStr, playlistName, {
+  const created = await spotifyApi.createPlaylist(playlistName, {
     description: `Listening room playlist for the ${slotDisplayTime} slot`,
     public: false,
   })

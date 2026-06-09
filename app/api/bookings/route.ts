@@ -1,25 +1,22 @@
 import { NextResponse } from 'next/server'
-import { initializeApp, getApps, cert } from 'firebase-admin/app'
-import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { initializeApp, getApps, getApp } from 'firebase/app'
+import { getFirestore, serverTimestamp, increment, collection, doc, runTransaction, query, orderBy, getDocs } from 'firebase/firestore'
 import { addTrackToPlaylist } from '@/lib/spotify'
 
 const WAITLIST_GROUP_ID = process.env.MAILERLITE_WAITLIST_GROUP_ID
 const CONFIRMED_GROUP_ID = process.env.MAILERLITE_CONFIRMED_GROUP_ID
 
-// Initialize Firebase Admin
-if (getApps().length === 0) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-    : undefined
-
-  if (serviceAccount) {
-    initializeApp({
-      credential: cert(serviceAccount),
-    })
-  }
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-const db = getApps().length > 0 ? getFirestore() : null
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
+const db = getFirestore(app)
 
 // Add subscriber to Mailerlite
 async function addToMailerlite(data: {
@@ -108,7 +105,6 @@ export async function POST(request: Request) {
       spotifyTrack,
     } = body
 
-    // Validate required fields
     if (!slotId || !fullName || !email || groupSize < 1) {
       return NextResponse.json(
         { error: 'Missing required fields' },
@@ -116,7 +112,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Validate friend names if there are friends
     if (friendNames && friendNames.length > 0) {
       const emptyNames = friendNames.filter((name: string) => !name || !name.trim())
       if (emptyNames.length > 0) {
@@ -127,23 +122,8 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!db) {
-      // Mock response if Firebase is not configured
+    if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
       const mockBookingId = `LR-${Date.now().toString(36).toUpperCase()}`
-
-      // Still try to add to Mailerlite
-      // await addToMailerlite({
-      //   email,
-      //   fullName,
-      //   instagram,
-      //   slotTime: slotDisplayTime || 'Unknown',
-      //   groupSize,
-      //   friendNames: friendNames || [],
-      //   spotifyTrack: spotifyTrack ? { name: spotifyTrack.name, artist: spotifyTrack.artist } : null,
-      //   bookingId: mockBookingId,
-      //   isWaitlist: false,
-      // })
-
       return NextResponse.json({
         success: true,
         bookingId: mockBookingId,
@@ -151,12 +131,11 @@ export async function POST(request: Request) {
       })
     }
 
-    // Use a transaction to prevent race conditions
-    const result = await db.runTransaction(async (transaction) => {
-      const slotRef = db.collection('slots').doc(slotId)
+    const result = await runTransaction(db, async (transaction) => {
+      const slotRef = doc(db, 'slots', slotId)
       const slotDoc = await transaction.get(slotRef)
 
-      if (!slotDoc.exists) {
+      if (!slotDoc.exists()) {
         throw new Error('Slot not found')
       }
 
@@ -166,41 +145,31 @@ export async function POST(request: Request) {
       const bookedCount = slotData.bookedCount || 0
 
       const availableSpots = capacity - bookedCount
-
       const isWaitlist = availableSpots < groupSize
 
-      // Generate a human-readable booking ID
       const bookingId = `LR-${Date.now().toString(36).toUpperCase()}`
-
-      const bookingRef = db.collection('bookings').doc()
+      const bookingRef = doc(collection(db, 'bookings'))
 
       const bookingData = {
         bookingId,
-
         slotId,
         slotDisplayTime: slotDisplayTime || null,
-
         fullName,
         email,
         instagram: instagram || null,
-
         friendNames: friendNames || [],
         groupSize,
-
         spotifyTrack: spotifyTrack || null,
-
         status: isWaitlist ? 'waitlist' : 'confirmed',
         isWaitlist,
-
-        createdAt: FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
       }
 
       transaction.set(bookingRef, bookingData)
 
-      // Only consume capacity if booking is confirmed
       if (!isWaitlist) {
         transaction.update(slotRef, {
-          bookedCount: FieldValue.increment(groupSize),
+          bookedCount: increment(groupSize),
         })
       }
 
@@ -211,7 +180,6 @@ export async function POST(request: Request) {
       }
     })
 
-    // Add to Mailerlite (outside transaction, don't fail if this fails)
     await addToMailerlite({
       email,
       fullName,
@@ -224,13 +192,11 @@ export async function POST(request: Request) {
       isWaitlist: result.isWaitlist,
     })
 
-    // Add track to playlist if provided (outside transaction)
     if (spotifyTrack?.uri) {
       try {
         await addTrackToPlaylist(spotifyTrack.uri, slotDisplayTime)
       } catch (error) {
         console.error('Failed to add track to playlist:', error)
-        // Don't fail the booking if playlist addition fails
       }
     }
 
@@ -251,12 +217,13 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    if (!db) {
+    if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
       return NextResponse.json([])
     }
 
-    const bookingsRef = db.collection('bookings')
-    const snapshot = await bookingsRef.orderBy('createdAt', 'desc').get()
+    const bookingsRef = collection(db, 'bookings')
+    const q = query(bookingsRef, orderBy('createdAt', 'desc'))
+    const snapshot = await getDocs(q)
 
     const bookings = snapshot.docs.map((doc) => ({
       id: doc.id,

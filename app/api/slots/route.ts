@@ -1,27 +1,23 @@
 import { NextResponse } from 'next/server'
-import { initializeApp, getApps, cert } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { initializeApp, getApps, getApp } from 'firebase/app'
+import { getFirestore, collection, doc, query, orderBy, getDocs, writeBatch } from 'firebase/firestore'
 import { generateTimeSlots } from '@/lib/time-slots'
 
-// Initialize Firebase Admin
-if (getApps().length === 0) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-    : undefined
-
-  if (serviceAccount) {
-    initializeApp({
-      credential: cert(serviceAccount),
-    })
-  }
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-const db = getApps().length > 0 ? getFirestore() : null
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
+const db = getFirestore(app)
 
 export async function GET() {
   try {
-    if (!db) {
-      // Return mock data if Firebase is not configured
+    if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
       const mockSlots = generateTimeSlots().map(slot => ({
         ...slot,
         capacity: 8,
@@ -31,16 +27,16 @@ export async function GET() {
       return NextResponse.json(mockSlots)
     }
 
-    const slotsRef = db.collection('slots')
-    const snapshot = await slotsRef.orderBy('time').get()
+    const slotsRef = collection(db, 'slots')
+    const q = query(slotsRef, orderBy('time'))
+    const snapshot = await getDocs(q)
     
     if (snapshot.empty) {
-      // Initialize slots if they don't exist
       const defaultSlots = generateTimeSlots()
-      const batch = db.batch()
+      const batch = writeBatch(db)
       
       for (const slot of defaultSlots) {
-        const docRef = slotsRef.doc(slot.id)
+        const docRef = doc(db, 'slots', slot.id)
         batch.set(docRef, {
           ...slot,
           capacity: 8,
