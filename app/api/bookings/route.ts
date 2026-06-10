@@ -83,8 +83,10 @@ async function addToMailerlite(data: {
       console.log('Successfully added to Mailerlite:', data.email)
     }
 
+    const subscriberId = (await response.json())?.data?.id
+
     const groupResponse = await fetch(
-      `https://connect.mailerlite.com/api/groups/${groupId}/subscribers`,
+      `https://connect.mailerlite.com/api/subscribers/${subscriberId}/groups/${groupId}`,
       {
         method: 'POST',
         headers: {
@@ -92,9 +94,6 @@ async function addToMailerlite(data: {
           'Accept': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          email: data.email,
-        }),
       }
     )
 
@@ -102,7 +101,7 @@ async function addToMailerlite(data: {
       const errorData = await groupResponse.json()
       console.error('Mailerlite error:', errorData)
     } else {
-      console.log('Successfully added to Mailerlite:', data.email)
+      console.log('Successfully added to Group:', groupId)
     }
   } catch (error) {
     console.error('Failed to add to Mailerlite:', error)

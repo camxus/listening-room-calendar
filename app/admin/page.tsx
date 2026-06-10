@@ -297,12 +297,12 @@ export default function AdminDashboard() {
         animate={{ opacity: 1, y: 0 }}
         className="sticky top-0 z-50 px-4 py-4 bg-background/80 backdrop-blur-xl border-b border-border"
       >
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-foreground">Admin Dashboard</h1>
             <p className="text-sm text-muted-foreground">Listening Room Bookings</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -341,7 +341,7 @@ export default function AdminDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-3 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-4"
         >
           <div className="p-4 rounded-2xl bg-card border border-border">
             <div className="flex items-center gap-3">
@@ -382,7 +382,7 @@ export default function AdminDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="flex gap-2"
+          className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4"
         >
           <Button
             variant={activeTab === 'bookings' ? 'default' : 'outline'}
