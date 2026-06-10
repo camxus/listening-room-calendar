@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { initializeApp, getApps, getApp } from 'firebase/app'
-import { getFirestore, serverTimestamp, increment, collection, doc, runTransaction, query, orderBy, getDocs } from 'firebase/firestore'
+import { getFirestore, serverTimestamp, increment, collection, doc, runTransaction, query, where, orderBy, limit, getDocs, getDoc, updateDoc } from 'firebase/firestore'
 import { addTrackToPlaylist } from '@/lib/spotify'
+import { isAdminAuthenticated } from '@/lib/admin'
 
 const WAITLIST_GROUP_ID = process.env.MAILERLITE_WAITLIST_GROUP_ID
 const CONFIRMED_GROUP_ID = process.env.MAILERLITE_CONFIRMED_GROUP_ID
@@ -18,7 +19,6 @@ const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
 const db = getFirestore(app)
 
-// Add subscriber to Mailerlite
 async function addToMailerlite(data: {
   email: string
   fullName: string
@@ -37,7 +37,6 @@ async function addToMailerlite(data: {
   }
 
   try {
-    // Split name into first and last
     const nameParts = data.fullName.trim().split(' ')
     const firstName = nameParts[0] || ''
     const lastName = nameParts.slice(1).join(' ') || ''
@@ -47,7 +46,6 @@ async function addToMailerlite(data: {
       fields: {
         name: firstName,
         last_name: lastName,
-        // Custom fields - these need to be created in Mailerlite first
         instagram: data.instagram || '',
         slot_time: data.slotTime,
         group_size: String(data.groupSize),
@@ -81,13 +79,11 @@ async function addToMailerlite(data: {
     if (!response.ok) {
       const errorData = await response.json()
       console.error('Mailerlite error:', errorData)
-      // Don't throw - we don't want to fail the booking if Mailerlite fails
     } else {
       console.log('Successfully added to Mailerlite:', data.email)
     }
   } catch (error) {
     console.error('Failed to add to Mailerlite:', error)
-    // Don't throw - we don't want to fail the booking if Mailerlite fails
   }
 }
 
@@ -236,6 +232,94 @@ export async function GET() {
     console.error('Error fetching bookings:', error)
     return NextResponse.json(
       { error: 'Failed to fetch bookings' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const cookieHeader = request.headers.get('cookie')
+    const sessionCookie = cookieHeader ? cookieHeader.match(/admin_session=([^;]+)/)?.[1] : undefined
+    if (!sessionCookie || !isAdminAuthenticated(sessionCookie)) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const body = await request.json()
+    const { id, status, slotId, groupSize, fullName, email, spotifyTrack } = body
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Booking id is required' },
+        { status: 400 }
+      )
+    }
+
+    const bookingsRef = collection(db, 'bookings')
+    const q = query(bookingsRef, where('bookingId', '==', id), limit(1))
+    const querySnapshot = await getDocs(q)
+
+    if (querySnapshot.empty) {
+      return NextResponse.json(
+        { error: 'Booking not found' },
+        { status: 404 }
+      )
+    }
+
+    const bookingDoc = querySnapshot.docs[0]
+    const bookingData = bookingDoc.data()
+    const updates: Record<string, unknown> = {
+      updatedAt: serverTimestamp(),
+    }
+
+    if (status) updates.status = status
+    if (fullName) updates.fullName = fullName
+    if (email) updates.email = email
+    if (typeof groupSize === 'number') updates.groupSize = groupSize
+    if (typeof spotifyTrack !== 'undefined') updates.spotifyTrack = spotifyTrack
+
+    if (slotId && slotId !== bookingData.slotId) {
+      updates.slotId = slotId
+
+      await runTransaction(db, async (transaction) => {
+        const oldSlotRef = doc(db, 'slots', bookingData.slotId)
+        const newSlotRef = doc(db, 'slots', slotId)
+        const oldSlotDoc = await transaction.get(oldSlotRef)
+        const newSlotDoc = await transaction.get(newSlotRef)
+
+        if (oldSlotDoc.exists() && !bookingData.isWaitlist && bookingData.status !== 'waitlist') {
+          transaction.update(oldSlotRef, {
+            bookedCount: increment(-bookingData.groupSize),
+          })
+        }
+
+        if (newSlotDoc.exists()) {
+          const newSlotData = newSlotDoc.data()!
+          const newAvailable = (newSlotData.capacity || 0) - (newSlotData.bookedCount || 0)
+          const newIsWaitlist = newAvailable < (groupSize || bookingData.groupSize)
+
+          updates.isWaitlist = newIsWaitlist
+          updates.status = newIsWaitlist ? 'waitlist' : 'confirmed'
+
+          if (!newIsWaitlist) {
+            transaction.update(newSlotRef, {
+              bookedCount: increment(groupSize || bookingData.groupSize),
+            })
+          }
+        }
+      })
+    }
+
+    await updateDoc(bookingDoc.ref, updates)
+
+    return NextResponse.json({ success: true, id })
+  } catch (error) {
+    console.error('Error updating booking:', error)
+    return NextResponse.json(
+      { error: 'Failed to update booking' },
       { status: 500 }
     )
   }

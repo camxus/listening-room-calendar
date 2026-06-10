@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { initializeApp, getApps, getApp } from 'firebase/app'
-import { getFirestore, collection, doc, query, orderBy, getDocs, writeBatch } from 'firebase/firestore'
+import { getFirestore, collection, doc, query, orderBy, getDocs, writeBatch, serverTimestamp, increment, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { generateTimeSlots } from '@/lib/time-slots'
+import { isAdminAuthenticated } from '@/lib/admin'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -65,6 +66,136 @@ export async function GET() {
     console.error('Error fetching slots:', error)
     return NextResponse.json(
       { error: 'Failed to fetch slots' },
+      { status: 500 }
+    )
+  }
+}
+
+const SESSION_COOKIE_NAME = 'admin_session'
+
+import { cookies } from 'next/headers'
+
+function getSessionFromRequest(request: Request): string | undefined {
+  const cookieHeader = request.headers.get('cookie')
+  if (!cookieHeader) return undefined
+  const match = cookieHeader.match(/admin_session=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : undefined
+}
+
+export async function POST(request: Request) {
+  try {
+    const sessionCookie = getSessionFromRequest(request)
+    if (!sessionCookie || !isAdminAuthenticated(sessionCookie)) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const body = await request.json()
+    const { time, displayTime, capacity = 8, waitlistEnabled = false } = body
+
+    if (!time || !displayTime) {
+      return NextResponse.json(
+        { error: 'time and displayTime are required' },
+        { status: 400 }
+      )
+    }
+
+    const id = `slot-${time.replace(':', '')}`
+    const slotData = {
+      time,
+      displayTime,
+      capacity,
+      bookedCount: 0,
+      waitlistEnabled,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+
+    const slotRef = doc(db, 'slots', id)
+    await setDoc(slotRef, slotData)
+
+    return NextResponse.json({ id, ...slotData }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating slot:', error)
+    return NextResponse.json(
+      { error: 'Failed to create slot' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const sessionCookie = getSessionFromRequest(request)
+    if (!sessionCookie || !isAdminAuthenticated(sessionCookie)) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const body = await request.json()
+    const { id, capacity, bookedCount, waitlistEnabled, displayTime } = body
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Slot id is required' },
+        { status: 400 }
+      )
+    }
+
+    const slotRef = doc(db, 'slots', id)
+    const updates: Record<string, unknown> = {
+      updatedAt: serverTimestamp(),
+    }
+
+    if (typeof capacity === 'number') updates.capacity = capacity
+    if (typeof bookedCount === 'number') updates.bookedCount = bookedCount
+    if (typeof waitlistEnabled === 'boolean') updates.waitlistEnabled = waitlistEnabled
+    if (displayTime) updates.displayTime = displayTime
+
+    await updateDoc(slotRef, updates)
+
+    return NextResponse.json({ success: true, id })
+  } catch (error) {
+    console.error('Error updating slot:', error)
+    return NextResponse.json(
+      { error: 'Failed to update slot' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const sessionCookie = getSessionFromRequest(request)
+    if (!sessionCookie || !isAdminAuthenticated(sessionCookie)) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Slot id is required' },
+        { status: 400 }
+      )
+    }
+
+    const slotRef = doc(db, 'slots', id)
+    await deleteDoc(slotRef)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting slot:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete slot' },
       { status: 500 }
     )
   }

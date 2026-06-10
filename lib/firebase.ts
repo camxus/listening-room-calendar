@@ -32,6 +32,7 @@ export interface TimeSlot {
 
 export interface Booking {
   id: string
+  bookingId: string
   slotId: string
   fullName: string
   email: string
@@ -39,6 +40,8 @@ export interface Booking {
   friendNames: string[]
   groupSize: number
   spotifyTrack: SpotifyTrack | null
+  status?: 'confirmed' | 'waitlist' | 'cancelled'
+  isWaitlist?: boolean
   createdAt: Date
 }
 
