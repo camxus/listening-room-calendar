@@ -40,6 +40,13 @@ async function addToMailerlite(data: {
     const nameParts = data.fullName.trim().split(' ')
     const firstName = nameParts[0] || ''
     const lastName = nameParts.slice(1).join(' ') || ''
+    const groupId = data.isWaitlist
+      ? WAITLIST_GROUP_ID
+        ? [WAITLIST_GROUP_ID]
+        : []
+      : CONFIRMED_GROUP_ID
+        ? [CONFIRMED_GROUP_ID]
+        : []
 
     const subscriberData = {
       email: data.email,
@@ -56,14 +63,7 @@ async function addToMailerlite(data: {
         booking_date: new Date().toISOString().split('T')[0],
         booking_id: data.bookingId,
         source: 'listening_room_booking',
-      },
-      groups: data.isWaitlist
-        ? WAITLIST_GROUP_ID
-          ? [WAITLIST_GROUP_ID]
-          : []
-        : CONFIRMED_GROUP_ID
-          ? [CONFIRMED_GROUP_ID]
-          : [],
+      }
     }
 
     const response = await fetch('https://connect.mailerlite.com/api/subscribers', {
@@ -78,6 +78,28 @@ async function addToMailerlite(data: {
 
     if (!response.ok) {
       const errorData = await response.json()
+      console.error('Mailerlite error:', errorData)
+    } else {
+      console.log('Successfully added to Mailerlite:', data.email)
+    }
+
+    const groupResponse = await fetch(
+      `https://connect.mailerlite.com/api/groups/${groupId}/subscribers`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          email: data.email,
+        }),
+      }
+    )
+
+    if (!groupResponse.ok) {
+      const errorData = await groupResponse.json()
       console.error('Mailerlite error:', errorData)
     } else {
       console.log('Successfully added to Mailerlite:', data.email)
