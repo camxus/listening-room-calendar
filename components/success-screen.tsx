@@ -143,7 +143,7 @@ export function SuccessScreen({ bookingData, onReset }: SuccessScreenProps) {
             </div>
 
             <a
-              href="https://partiful.com/e/PMT9ymToSFpfRbcOtMzY?accept-cohost=22e0649f-9f93-448a-8beb-9012f63203ab"
+              href="https://partiful.com/e/PMT9ymToSFpfRbcOtMzY"
               target="_blank"
               rel="noopener noreferrer"
               className="w-full h-14 rounded-xl bg-card border border-border/80 text-foreground font-bold text-base shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_2px_6px_rgba(0,0,0,0.1)] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)] transition-all duration-200 flex items-center justify-center gap-2"
