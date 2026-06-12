@@ -8,7 +8,7 @@ const spotifyApi = new SpotifyWebApi({
 
 let tokenExpiresAt = 0
 
-async function getAccessToken() {
+export async function getAccessToken() {
   if (Date.now() < tokenExpiresAt) {
     return spotifyApi.getAccessToken()
   }

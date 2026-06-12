@@ -240,17 +240,16 @@ export async function DELETE(
     })
 
     let promotedBookingId: string | null = null
+    const promotedBookingIds: string[] = []
 
-    if (!wasWaitlisted) {
+    {
       const slotRef = doc(db, 'slots', bookingData.slotId)
       const slotDoc = await getDoc(slotRef)
 
       if (slotDoc.exists()) {
-        const slotData = slotDoc.data()!
-
-        const availableSpots =
-          (slotData.capacity || 0) -
-          (slotData.bookedCount || 0)
+        let slotData = slotDoc.data()!
+        let availableSpots =
+          (slotData.capacity || 0) - (slotData.bookedCount || 0)
 
         const waitlistQ = query(
           collection(db, 'bookings'),
@@ -260,74 +259,80 @@ export async function DELETE(
         )
         const waitlistSnapshot = await getDocs(waitlistQ)
 
-        const candidateDoc = waitlistSnapshot.docs.find((d) => {
-          const data = d.data()
-          return data.groupSize <= availableSpots
-        })
+        const apiKey = process.env.MAILERLITE_API_KEY
+        const CONFIRMED_GROUP_ID =
+          process.env.MAILERLITE_CONFIRMED_GROUP_ID
+        const WAITLIST_GROUP_ID =
+          process.env.MAILERLITE_WAITLIST_GROUP_ID
 
-        if (candidateDoc) {
-          const candidateData = candidateDoc.data()
-          const candidateRef = candidateDoc.ref
+        for (const docSnap of waitlistSnapshot.docs) {
+          if (availableSpots <= 0) break
 
-          await runTransaction(db, async (transaction) => {
-            transaction.update(candidateRef, {
-              status: 'confirmed',
-              isWaitlist: false,
-              promotedAt: serverTimestamp(),
+          const candidateData = docSnap.data()
+
+          if (candidateData.groupSize <= availableSpots) {
+            await runTransaction(db, async (transaction) => {
+              transaction.update(docSnap.ref, {
+                status: 'confirmed',
+                isWaitlist: false,
+                promotedAt: serverTimestamp(),
+              })
+
+              transaction.update(slotRef, {
+                bookedCount: increment(
+                  candidateData.groupSize
+                ),
+              })
             })
 
-            transaction.update(slotRef, {
-              bookedCount: increment(
-                candidateData.groupSize
-              ),
-            })
-          })
+            promotedBookingIds.push(candidateData.bookingId)
+            if (!promotedBookingId) promotedBookingId = candidateData.bookingId
+            availableSpots -= candidateData.groupSize
 
-          promotedBookingId = candidateData.bookingId
+            if (apiKey && CONFIRMED_GROUP_ID && WAITLIST_GROUP_ID && candidateData.email) {
+              try {
+                const getRes = await fetch(
+                  `https://connect.mailerlite.com/api/subscribers/${encodeURIComponent(
+                    candidateData.email
+                  )}`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${apiKey}`,
+                      Accept: 'application/json',
+                    },
+                  }
+                )
 
-          const apiKey = process.env.MAILERLITE_API_KEY
-          const CONFIRMED_GROUP_ID =
-            process.env.MAILERLITE_CONFIRMED_GROUP_ID
-          const WAITLIST_GROUP_ID =
-            process.env.MAILERLITE_WAITLIST_GROUP_ID
+                if (getRes.ok) {
+                  const subscriber = await getRes.json()
+                  const subscriberId = subscriber.data.id
 
-          const getRes = await fetch(
-            `https://connect.mailerlite.com/api/subscribers/${encodeURIComponent(
-              candidateData.email
-            )}`,
-            {
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                Accept: 'application/json',
-              },
+                  await fetch(
+                    `https://connect.mailerlite.com/api/subscribers/${subscriberId}/groups/${CONFIRMED_GROUP_ID}`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        Accept: 'application/json',
+                      },
+                    }
+                  )
+
+                  await fetch(
+                    `https://connect.mailerlite.com/api/subscribers/${subscriberId}/groups/${WAITLIST_GROUP_ID}`,
+                    {
+                      method: 'DELETE',
+                      headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        Accept: 'application/json',
+                      },
+                    }
+                  )
+                }
+              } catch (err) {
+                console.error('MailerLite update failed for', candidateData.email, err)
+              }
             }
-          )
-
-          if (getRes.ok) {
-            const subscriber = await getRes.json()
-            const subscriberId = subscriber.data.id
-
-            await fetch(
-              `https://connect.mailerlite.com/api/subscribers/${subscriberId}/groups/${CONFIRMED_GROUP_ID}`,
-              {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${apiKey}`,
-                  Accept: 'application/json',
-                },
-              }
-            )
-
-            await fetch(
-              `https://connect.mailerlite.com/api/subscribers/${subscriberId}/groups/${WAITLIST_GROUP_ID}`,
-              {
-                method: 'DELETE',
-                headers: {
-                  Authorization: `Bearer ${apiKey}`,
-                  Accept: 'application/json',
-                },
-              }
-            )
           }
         }
       }
@@ -341,10 +346,15 @@ export async function DELETE(
         : 'Booking cancelled successfully',
     })
   } catch (error) {
-    console.error('Error cancelling booking:', error)
+    const err = error instanceof Error ? error : new Error(String(error))
+    console.error('[cancel-booking] Error cancelling booking:',
+      err.message
+    )
     return NextResponse.json(
       {
         error: 'Failed to cancel booking',
+        message: err.message,
+        code: (err as any)?.code,
       },
       {
         status: 500,

@@ -63,3 +63,20 @@ export interface SpotifyTrack {
   uri: string
   previewUrl?: string
 }
+
+export interface PlaylistTrack extends SpotifyTrack {
+  source?: 'booking' | 'search' | 'admin'
+  bookingId?: string
+  bookingName?: string
+}
+
+export interface Playlist {
+  id: string
+  playlistId?: string | null
+  slotId: string
+  slotDisplayTime: string
+  name: string
+  tracks: PlaylistTrack[]
+  createdAt?: string | null
+  updatedAt?: string | null
+}

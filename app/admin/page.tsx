@@ -23,11 +23,13 @@ import {
   Settings,
   Save,
   X,
+  Disc3,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { TimeSlot, Booking, WaitlistEntry } from '@/lib/firebase'
+import { AdminPlaylistBuilder } from '@/components/admin-playlist-builder'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -37,7 +39,7 @@ interface SlotWithBookings extends TimeSlot {
 
 export default function AdminDashboard() {
   const [expandedSlot, setExpandedSlot] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'bookings' | 'waitlist' | 'slots'>('bookings')
+  const [activeTab, setActiveTab] = useState<'bookings' | 'waitlist' | 'slots' | 'playlists'>('bookings')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [password, setPassword] = useState('')
@@ -408,6 +410,14 @@ export default function AdminDashboard() {
             <Settings className="w-4 h-4" />
             Slots
           </Button>
+          <Button
+            variant={activeTab === 'playlists' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('playlists')}
+            className="gap-2"
+          >
+            <Disc3 className="w-4 h-4" />
+            Playlist Builder
+          </Button>
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -495,7 +505,7 @@ export default function AdminDashboard() {
               )}
             </motion.div>
           ) : activeTab === 'waitlist' ? (
-            <motion.div
+<motion.div
               key="waitlist"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -507,7 +517,7 @@ export default function AdminDashboard() {
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
               ) : waitlist?.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
+                <div className="text-center py-12 text-muted-foreground px-4">
                   <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p>No one on the waitlist yet</p>
                 </div>
@@ -539,6 +549,15 @@ export default function AdminDashboard() {
                   )
                 })
               )}
+            </motion.div>
+          ) : activeTab === 'playlists' ? (
+            <motion.div
+              key="playlists"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <AdminPlaylistBuilder slots={slots || []} bookings={bookings || []} />
             </motion.div>
           ) : (
             <motion.div
@@ -573,7 +592,7 @@ export default function AdminDashboard() {
                       <X className="w-4 h-4" />
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">Time (24h)</label>
                       <Input
@@ -636,7 +655,7 @@ export default function AdminDashboard() {
                         onSubmit={handleUpdateSlot}
                         className="p-4 rounded-2xl border border-border bg-card space-y-4"
                       >
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-foreground mb-2">Display Time</label>
                             <Input
@@ -734,9 +753,9 @@ export default function AdminDashboard() {
 function BookingCard({ booking, onCancel }: { booking: Booking; onCancel: () => void }) {
   return (
     <div className="p-4 rounded-xl bg-secondary/30 border border-border/50">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <p className="font-semibold text-foreground">{booking.fullName}</p>
             <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
               Group of {booking.groupSize}
@@ -764,7 +783,7 @@ function BookingCard({ booking, onCancel }: { booking: Booking; onCancel: () => 
         </div>
 
         {booking.spotifyTrack && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-spotify/10 max-w-[180px]">
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-spotify/10">
             {booking.spotifyTrack.albumArt && (
               <img
                 src={booking.spotifyTrack.albumArt}
@@ -784,7 +803,7 @@ function BookingCard({ booking, onCancel }: { booking: Booking; onCancel: () => 
         )}
       </div>
 
-      <div className="flex items-center justify-between mt-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-3 gap-2">
         {booking.createdAt && (
           <p className="text-xs text-muted-foreground/70">
             Booked {format(new Date(booking.createdAt), 'MMM d, h:mm a')}
@@ -795,7 +814,7 @@ function BookingCard({ booking, onCancel }: { booking: Booking; onCancel: () => 
             variant="ghost"
             size="sm"
             onClick={onCancel}
-            className="text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive w-fit"
           >
             <XCircle className="w-4 h-4 mr-1" />
             Cancel

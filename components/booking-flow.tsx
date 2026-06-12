@@ -139,7 +139,7 @@ function BookingFlowContent() {
         <div className="max-w-md mx-auto">
           <div className="text-center mb-4">
             <h1 className="text-lg font-bold text-foreground tracking-tight">
-              COMBO X IMMERSIA: Listening Room
+              COMBO X IMMERSIA: FÊTE DE LA MUSIQUE
             </h1>
             <p className="text-xs text-muted-foreground mt-1">Reserve your experience</p>
           </div>
