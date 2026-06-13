@@ -281,7 +281,7 @@ export async function GET(request: Request) {
 
   try {
     if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
-      return NextResponse.json({ playlists: [] })
+      return NextResponse.json([])
     }
 
     const { searchParams } = new URL(request.url)
@@ -305,7 +305,7 @@ export async function GET(request: Request) {
       updatedAt: serializeTimestamp(playlistDoc.data().updatedAt),
     }))
 
-    return NextResponse.json({ playlists })
+    return NextResponse.json(playlists)
   } catch (error) {
     console.error('Error fetching playlists:', error)
     return NextResponse.json(

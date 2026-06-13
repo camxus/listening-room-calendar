@@ -24,12 +24,16 @@ import {
   Save,
   X,
   Disc3,
+  Copy,
+  ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { TimeSlot, Booking, WaitlistEntry } from '@/lib/firebase'
+import { TimeSlot, Booking, WaitlistEntry, Playlist } from '@/lib/firebase'
 import { AdminPlaylistBuilder } from '@/components/admin-playlist-builder'
+import { QRCodeDisplay } from '@/components/ui/qr-code'
+import Link from 'next/link'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -62,6 +66,11 @@ export default function AdminDashboard() {
 
   const { data: waitlist, isLoading: waitlistLoading, mutate: mutateWaitlist } = useSWR<WaitlistEntry[]>(
     '/api/waitlist',
+    fetcher
+  )
+
+  const { data: playlists, mutate: mutatePlaylists } = useSWR<Playlist[]>(
+    '/api/playlists',
     fetcher
   )
 
@@ -481,7 +490,7 @@ export default function AdminDashboard() {
                             transition={{ duration: 0.2 }}
                             className="overflow-hidden"
                           >
-                            <div className="border-t border-border p-4 space-y-3">
+                            <div className="border-t border-border p-4 space-y-4">
                               {slotBookings.length === 0 ? (
                                 <p className="text-sm text-muted-foreground text-center py-4">
                                   No bookings for this slot
@@ -495,6 +504,15 @@ export default function AdminDashboard() {
                                   />
                                 ))
                               )}
+
+                              {(() => {
+                                console.log(playlists)
+                                const slotPlaylist = playlists?.find(p => p.slotId === slot.id)
+                                if (!slotPlaylist) return null
+                                return (
+                                  <SlotPlaylistQR playlistId={slotPlaylist.id} />
+                                )
+                              })()}
                             </div>
                           </motion.div>
                         )}
@@ -505,7 +523,7 @@ export default function AdminDashboard() {
               )}
             </motion.div>
           ) : activeTab === 'waitlist' ? (
-<motion.div
+            <motion.div
               key="waitlist"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -820,6 +838,38 @@ function BookingCard({ booking, onCancel }: { booking: Booking; onCancel: () => 
             Cancel
           </Button>
         )}
+      </div>
+    </div>
+  )
+}
+
+function SlotPlaylistQR({ playlistId }: { playlistId: string }) {
+  const joinUrl = typeof window !== 'undefined' ? `${window.location.origin}/join/${playlistId}` : ''
+
+  if (!joinUrl) return null
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(joinUrl)
+  }
+
+  return (
+    <div className="pt-4 border-t border-border">
+      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase">Share Playlist QR</p>
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-white">
+          <QRCodeDisplay value={joinUrl} size={80} />
+        </div>
+        <Link href={joinUrl} target='_target'>
+          <Button
+            size="sm"
+            variant="outline"
+            // onClick={copyLink}
+            className="text-xs gap-1"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Open Link
+          </Button>
+        </Link>
       </div>
     </div>
   )
